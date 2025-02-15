@@ -6,9 +6,9 @@ COPY requirements.txt /app/
 
 RUN apt-get update && \
     apt-get install -y python3 python3-venv python3-pip cron && \
-    python3 -m venv /venv && \
-    /venv/bin/pip install --upgrade pip && \
-    /venv/bin/pip install --no-cache-dir -r requirements.txt
+    python3 -m venv /app/venv && \
+    /app/venv/bin/pip install --upgrade pip && \
+    /app/venv/bin/pip install --use-deprecated=legacy-resolver --no-cache-dir -r requirements.txt
 
 COPY main.py .
 COPY crontab /etc/cron.d/custom_cron

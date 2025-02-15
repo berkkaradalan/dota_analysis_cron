@@ -15,6 +15,8 @@ load_dotenv()
 
 class env_variables():
     MONGODB_URL = os.getenv("MONGODB_URL")
+    OPEN_DOTA_URL = os.getenv("OPEN_DOTA_URL")
+    DOTA_CDN_URL = os.getenv("DOTA_CDN_URL")
 
 class AttackTypes(str, Enum):
     MELEE = "Melee"
@@ -176,7 +178,7 @@ def update_matchs_of_users(user_ids: list, match_collection, limit=100):
         offset = 0
         while True:
             user_matches = requests.get(
-                f"https://api.opendota.com/api/players/{user_id}/matches?limit={limit}&offset={offset}"
+                f"{env_variables.OPEN_DOTA_URL}/players/{user_id}/matches?limit={limit}&offset={offset}"
             ).json()
             if not user_matches:
                 break
@@ -194,7 +196,7 @@ def update_matchs_of_users(user_ids: list, match_collection, limit=100):
                         Kills=user_match["kills"],
                         Deaths=user_match["deaths"],
                         Assists=user_match["assists"],
-                    ).model_dump())
+                    ).dict())
                 except DuplicateKeyError:
                     pass
                 except Exception as e:
@@ -205,15 +207,15 @@ def update_matchs_of_users(user_ids: list, match_collection, limit=100):
 @retry(stop_max_attempt_number=10)
 def update_wins_loses_of_user(user_ids:list, win_lose_collection, limit=100):
     for user_id in user_ids:
-        user_win_lose = requests.get(f"https://api.opendota.com/api/players/{user_id}/wl").json()
-        if "win" not in user_win_lose:
+        user_win_lose = requests.get(f"{env_variables.OPEN_DOTA_URL}/players/{user_id}/wl").json()
+        if "win" not in str(user_win_lose):
             return
         try:
             win_lose_collection.insert_one(UserWinLoose(
                     AccountID=user_id,
                     Win=user_win_lose["win"],
                     Lose=user_win_lose["lose"]
-            ).model_dump())
+            ).dict())
         except DuplicateKeyError:
             pass
         except Exception as e:
@@ -229,7 +231,7 @@ def update_detailed_match_collection_of_user(user_ids: list, match_collection, d
             if not matches_list:
                 break
             for user_match in matches_list:
-                detailed_match = requests.get(f"https://api.opendota.com/api/matches/{user_match['MatchID']}").json()
+                detailed_match = requests.get(f"{env_variables.OPEN_DOTA_URL}/matches/{user_match['MatchID']}").json()
                 detailed_match = detailed_match.get("players", [])
                 detailed_match = next((player for player in detailed_match if player.get('account_id') == int(user_id)), None)
                 if detailed_match:
@@ -268,7 +270,7 @@ def update_detailed_match_collection_of_user(user_ids: list, match_collection, d
                             Lose=detailed_match["lose"],
                             KillDeathAssist=detailed_match["kda"],
                             CollectionHash=str(user_match["MatchID"] + user_id)
-                        ).model_dump())
+                        ).dict())
                     except DuplicateKeyError:
                         pass
                     except Exception as e:
@@ -277,8 +279,8 @@ def update_detailed_match_collection_of_user(user_ids: list, match_collection, d
 
 @retry(stop_max_attempt_number=10, retry_on_exception=retry_logging_function)
 def update_hero_collection(hero_collection):
-    heroes = send_request_to_open_dota(url="https://api.opendota.com/api/heroes")
-    if "localized_name" not in heroes:
+    heroes = send_request_to_open_dota(url=f"{env_variables.OPEN_DOTA_URL}/heroes")
+    if "localized_name" not in str(heroes):
         return
     for hero in heroes:
         try:
@@ -287,8 +289,8 @@ def update_hero_collection(hero_collection):
                 HeroName = hero["localized_name"],
                 HeroRoles = hero["roles"],
                 AttackType = hero["attack_type"],
-                HeroImageURL = f"https://cdn.dota2.com/apps/dota2/images/heroes/{hero['name'].replace('npc_dota_hero_', '')}_full.png"
-            ).model_dump())
+                HeroImageURL = f"{env_variables.DOTA_CDN_URL}/apps/dota2/images/heroes/{hero['name'].replace('npc_dota_hero_', '')}_full.png"
+            ).dict())
         except DuplicateKeyError:
             pass
         except Exception as e:
@@ -297,7 +299,7 @@ def update_hero_collection(hero_collection):
 @retry(stop_max_attempt_number=10, retry_on_exception=retry_logging_function)
 def update_favorite_heroes_of_users(user_ids:list, favorite_heroes_collection):
     for user_id in user_ids:
-        favorite_heroes = send_request_to_open_dota(url=f"https://api.opendota.com/api/players/{user_id}/heroes")
+        favorite_heroes = send_request_to_open_dota(url=f"{env_variables.OPEN_DOTA_URL}/players/{user_id}/heroes")
         if len(favorite_heroes)<0:
             return
         
@@ -310,7 +312,7 @@ def update_favorite_heroes_of_users(user_ids:list, favorite_heroes_collection):
                     HeroID=str(hero["hero_id"]),
                     LastPlayed=hero["last_played"],
                     Games=hero["games"],
-                    GamesWon=hero["win"])).model_dump())
+                    GamesWon=hero["win"])).dict())
         except DuplicateKeyError:
             pass
         except Exception as e:
@@ -327,7 +329,7 @@ def main_func():
     update_matchs_of_users(user_ids=user_ids, match_collection=match_collection)
     update_wins_loses_of_user(user_ids=user_ids, win_lose_collection=win_lose_collection)
     update_detailed_match_collection_of_user(user_ids=user_ids, match_collection=match_collection, detailed_match_collection=detailed_match_collection)
-    update_hero_collection(user_ids=user_ids, hero_collection=hero_collection)
+    update_hero_collection(hero_collection=hero_collection)
     update_favorite_heroes_of_users(user_ids=user_ids, favorite_heroes_collection=favorite_heroes_collection)
 
 
